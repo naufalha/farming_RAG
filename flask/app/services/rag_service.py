@@ -1,127 +1,112 @@
-# app/services/rag_service.py (Hybrid: SQL Agent + Vector Store RAG)
-# --- Menggabungkan kekuatan SQL dan Pencarian Semantik ---
+# app/services/rag_service.py
+# --- Versi 3: Menggunakan Agent yang bisa memilih alat (SQL atau Vector DB) ---
 
 import os
 from . import sql_database_service, vector_store_service
-from langchain_deepseek import ChatDeepSeek
-from langchain_community.agent_toolkits import create_sql_agent
-from langchain_community.utilities import SQLDatabase
-from langchain.chains import LLMChain
-from langchain.memory import ConversationBufferMemory
-from langchain_core.prompts import PromptTemplate
 from datetime import datetime
 
+# Import komponen yang dibutuhkan untuk Agent
+from langchain_openai import ChatOpenAI
+from langchain_community.utilities import SQLDatabase
+from langchain_community.agent_toolkits import create_sql_agent
+from langchain.agents import Tool, create_openai_tools_agent, AgentExecutor
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain.memory import ConversationBufferWindowMemory
+
 # --- Inisialisasi Komponen ---
-llm = ChatDeepSeek(
+
+# 1. Inisialisasi LLM menggunakan ChatOpenAI wrapper (sesuai eksperimen Anda)
+llm = ChatOpenAI(
     model="deepseek-chat",
-    api_key=os.getenv("DEEPSEEK_API_KEY"),
-    base_url=os.getenv("DEEPSEEK_API_BASE"),
-    temperature=0.2 # Dibuat lebih faktual
+    openai_api_key=os.getenv("DEEPSEEK_API_KEY"),
+    openai_api_base=os.getenv("DEEPSEEK_API_BASE", "https://api.deepseek.com/v1"),
+    temperature=0
 )
+
+# 2. Inisialisasi koneksi database untuk LangChain
 db_uri = f"sqlite:///{sql_database_service.DB_PATH}"
 db = SQLDatabase.from_uri(db_uri)
 
-# --- State Management untuk Memori ---
+# 3. Manajemen Memori Percakapan
 conversation_memory_store = {}
 
 def get_or_create_memory(chat_id: str):
     """Membuat atau mengambil memori percakapan untuk pengguna tertentu."""
     if chat_id not in conversation_memory_store:
-        conversation_memory_store[chat_id] = ConversationBufferMemory(memory_key="history", input_key="input")
+        # Menggunakan Window Memory untuk efisiensi, hanya mengingat 5 interaksi terakhir
+        conversation_memory_store[chat_id] = ConversationBufferWindowMemory(
+            k=5, memory_key="chat_history", return_messages=True
+        )
     return conversation_memory_store[chat_id]
 
-# --- Alat: SQL Agent untuk Mengambil Data Terstruktur ---
-def get_sql_context(question: str) -> str:
-    """Menggunakan SQL Agent untuk membuat kueri dan mengambil data dari database SQL."""
-    print(f"SQL_TOOL: Menerima pertanyaan untuk diubah ke SQL -> '{question}'")
-    agent_executor = create_sql_agent(
-        llm=llm,
-        db=db,
-        agent_type="openai-tools",
-        verbose=False # Set True untuk melihat "pikiran" agent
-    )
-    try:
-        result = agent_executor.invoke({"input": question})
-        return result.get("output", "Tidak ada data yang ditemukan di database.")
-    except Exception as e:
-        print(f"SQL_TOOL: Gagal menjalankan SQL Agent: {e}")
-        return "Gagal mengambil data dari database sensor."
 
-# --- Template Prompt Utama (Hybrid) ---
-hybrid_template = """
-Anda adalah Mubarok, asisten pertanian virtual yang ahli. Tugas Anda adalah mensintesis semua informasi yang tersedia untuk memberikan jawaban yang akurat dan mudah dimengerti.
+# --- Definisikan "Alat" yang Bisa Digunakan Agent ---
 
-Aturan Anda:
-1. JANGAN PERNAH ulangi perkenalan. Langsung jawab pertanyaan pengguna.
-2. Gunakan Riwayat Percakapan untuk memahami konteks.
-3. Prioritaskan data dari 'Konteks Database (SQL)' untuk menjawab pertanyaan spesifik (misal: "berapa nilai terakhir?").
-4. Gunakan 'Konteks Ringkasan/Dokumen' untuk menjawab pertanyaan tentang tren, rata-rata, atau pengetahuan umum.
-
-Riwayat Percakapan:
-{history}
-
-Konteks Database (SQL - Realtime):
-{sql_context}
-
-Konteks Ringkasan/Dokumen (Vector DB):
-{vector_context}
-
-Pertanyaan Pengguna: {input}
-
-Jawaban Akhir Anda (sintesis dari semua konteks):
-"""
-hybrid_prompt_template = PromptTemplate(
-    input_variables=["history", "sql_context", "vector_context", "input"],
-    template=hybrid_template
+# Alat 1: SQL Agent untuk data terstruktur (sensor, cuaca, kondisi tanaman)
+sql_agent_executor = create_sql_agent(
+    llm=llm,
+    db=db,
+    agent_type="openai-tools",
+    verbose=True,
+    prefix="""Anda adalah ahli kueri SQLite. Mengingat pertanyaan pengguna, buatlah kueri SQLite yang benar, jalankan, dan kembalikan hasilnya. Anda harus membatasi jumlah baris yang diambil jika tidak diminta secara spesifik."""
+)
+sql_tool = Tool(
+    name="database_pertanian",
+    func=sql_agent_executor.invoke,
+    description="Gunakan alat ini untuk menjawab pertanyaan tentang data sensor spesifik (pH, TDS, suhu, kelembapan), prakiraan cuaca, dan kondisi tanaman. Alat ini bisa melakukan agregasi seperti rata-rata, nilai minimum, dan maksimum."
 )
 
+# Alat 2: Vector Store Retriever untuk pengetahuan umum/PDF
+def vector_search(query: str, db_collection):
+    """Fungsi pembungkus untuk pencarian di Vector DB."""
+    print(f"VECTOR_TOOL: Mencari pengetahuan untuk -> '{query}'")
+    return "\n".join(vector_store_service.search_db(query, db_collection, n_results=3))
+
+def create_vector_tool(db_collection):
+    """Membuat Tool untuk database vektor."""
+    return Tool(
+        name="database_pengetahuan_pdf",
+        func=lambda query: vector_search(query, db_collection),
+        description="Gunakan alat ini untuk menjawab pertanyaan umum, teoritis, atau berdasarkan dokumen pengetahuan yang telah di-upload, seperti 'bagaimana cara mengatasi jamur' atau 'apa saja gejala penyakit X'."
+    )
+
+# --- Prompt Utama untuk Router Agent ---
+MAIN_PROMPT = ChatPromptTemplate.from_messages([
+    ("system", f"""
+    Anda adalah Mubarok, asisten pertanian AI yang sangat cerdas dan siap membantu. Waktu saat ini adalah {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.
+    Tugas Anda adalah memilih alat yang paling tepat untuk menjawab pertanyaan pengguna.
+    - Untuk pertanyaan tentang data sensor, cuaca, atau kondisi tanaman, gunakan `database_pertanian`.
+    - Untuk pertanyaan tentang pengetahuan umum atau isi dokumen, gunakan `database_pengetahuan_pdf`.
+    Setelah mendapatkan hasil dari alat, berikan jawaban akhir yang ramah dan jelas dalam Bahasa Indonesia.
+    """),
+    MessagesPlaceholder(variable_name="chat_history"),
+    ("user", "{input}"),
+    MessagesPlaceholder(variable_name="agent_scratchpad"),
+])
+
+
+# --- Fungsi Utama yang Dipanggil oleh API Route ---
 def get_rag_response(question: str, db_collection, chat_id: str):
-    """
-    Menjawab pertanyaan pengguna menggunakan pendekatan RAG hibrida.
-    """
-    print(f"HYBRID_RAG: Menerima pertanyaan dari {chat_id} -> '{question}'")
+    """Menjawab pertanyaan pengguna dengan memilih alat yang paling sesuai."""
+    print(f"ROUTER_AGENT: Menerima pertanyaan dari {chat_id} -> '{question}'")
+    
     memory = get_or_create_memory(chat_id)
-
-    # 1. Dapatkan konteks presisi dari Database SQL
-    sql_context = get_sql_context(question)
+    tools = [sql_tool, create_vector_tool(db_collection)]
     
-    # 2. Dapatkan konteks ringkasan/pengetahuan dari Vector Store
-    vector_context_list = vector_store_service.search_db(question, db_collection, n_results=3)
-    vector_context = "\n".join(vector_context_list)
-
-    # 3. Jalankan LLMChain utama dengan semua konteks
-    conversation_chain = LLMChain(
-        llm=llm,
-        prompt=hybrid_prompt_template,
-        memory=memory
+    # Membuat agent utama yang berfungsi sebagai router
+    agent = create_openai_tools_agent(llm, tools, MAIN_PROMPT)
+    agent_executor = AgentExecutor(
+        agent=agent, 
+        tools=tools, 
+        verbose=True, 
+        memory=memory,
+        handle_parsing_errors=True # Penting untuk stabilitas
     )
 
-    answer = conversation_chain.predict(
-        input=question,
-        sql_context=sql_context,
-        vector_context=vector_context or "Tidak ada pengetahuan tambahan dari dokumen atau ringkasan."
-    )
-    return answer
-
-# --- Fungsi Tambahan (Dipertahankan) ---
-
-def summarize_text(text_chunk: str) -> str:
-    """Meringkas sebuah potongan teks menggunakan LLM."""
-    print("LANGCHAIN_SUMMARIZER: Memulai proses peringkasan...")
-    template = "Anda adalah asisten ahli ringkasan. Buat ringkasan singkat (2-3 kalimat) dari teks berikut dalam Bahasa Indonesia:\n\nTeks:\n{text}\n\nRingkasan Singkat:"
-    prompt = PromptTemplate.from_template(template)
-    summarizer_chain = LLMChain(llm=llm, prompt=prompt)
-    summary = summarizer_chain.run(text=text_chunk)
-    return summary
-
-def get_latest_summary(db_collection):
-    """Membuat ringkasan kondisi terkini dengan bertanya ke diri sendiri."""
-    print("RAG_SUMMARY: Membuat ringkasan kondisi greenhouse terbaru...")
-    summary_question = "Berikan saya ringkasan kondisi greenhouse terkini berdasarkan data pH, TDS, dan cuaca terakhir."
-    
-    dummy_chat_id = "summary_task"
-    if dummy_chat_id in conversation_memory_store:
-        del conversation_memory_store[dummy_chat_id]
-
-    summary = get_rag_response(summary_question, db_collection, dummy_chat_id)
-    return summary
+    try:
+        # Menjalankan agent dengan input dari pengguna
+        result = agent_executor.invoke({"input": question})
+        return result.get("output", "Maaf, saya tidak dapat menemukan jawaban.")
+    except Exception as e:
+        print(f"ROUTER_AGENT: Gagal menjalankan agent: {e}")
+        return "Maaf, terjadi kesalahan saat saya memproses permintaan Anda."

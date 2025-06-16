@@ -1,12 +1,11 @@
 # app/services/mqtt_service.py
-# --- Versi dengan Logika Stabilisasi untuk Pencatatan Data ---
+# --- Versi 2: Mendukung berbagai jenis sensor dan menyimpan ke SQL ---
 
 import paho.mqtt.client as mqtt
 import json
 import time
 import os
 import threading
-from datetime import datetime
 
 from . import sql_database_service
 
@@ -19,16 +18,7 @@ MQTT_CLIENT_ID_BASE = os.getenv("MQTT_CLIENT_ID", "smart-farm-server")
 TOPIC_DATA = "sensor/data"
 TOPIC_COMMAND = "sensor/command"
 
-# --- PERUBAHAN: State untuk menyimpan pembacaan terakhir ---
-# Dictionary ini akan menyimpan data terakhir yang diterima untuk setiap sensor
-# sebelum disimpan ke database.
-latest_readings = {
-    "ph": None,
-    "tds": None
-}
-
 def on_connect(client, userdata, flags, rc, properties=None):
-    """Callback yang dipanggil saat berhasil terhubung ke broker."""
     if rc == 0:
         client_id = client._client_id.decode()
         print(f"MQTT: Berhasil terhubung ke Broker dengan Client ID: {client_id}")
@@ -38,60 +28,36 @@ def on_connect(client, userdata, flags, rc, properties=None):
         print(f"MQTT: Gagal terhubung, kode error: {rc}")
 
 def on_message(client, userdata, msg):
-    """
-    Callback ini sekarang hanya bertugas untuk memperbarui pembacaan terakhir
-    di memori, bukan langsung menyimpan ke database.
-    """
+    """Callback yang menangani semua jenis data dari sensor."""
     try:
         payload_str = msg.payload.decode('utf-8')
         data = json.loads(payload_str)
         sensor_type = data.get("type")
+        
+        print(f"MQTT: Pesan diterima [{sensor_type}] -> {payload_str}")
 
-        if sensor_type in latest_readings:
-            # Perbarui dictionary dengan data terbaru yang masuk
-            latest_readings[sensor_type] = data
-            print(f"MQTT: Data diterima dan disimpan sementara -> {payload_str}")
+        # Menggunakan satu fungsi untuk menangani semua data lingkungan
+        sql_database_service.insert_environment_log(data)
 
     except Exception as e:
         print(f"MQTT: Error saat memproses pesan: {e}")
 
 def command_publisher_thread(client):
-    """
-    Thread ini sekarang mengorkestrasi seluruh alur:
-    1. Kirim perintah.
-    2. Tunggu 60 detik untuk stabilisasi.
-    3. Ambil data terakhir yang disimpan oleh on_message.
-    4. Simpan data tersebut ke SQL.
-    """
+    """Thread untuk meminta data dari semua sensor secara bergantian."""
     while True:
         try:
-            # --- Siklus Pengukuran TDS ---
             print("ORCHESTRATOR: Meminta pengukuran TDS...")
             client.publish(TOPIC_COMMAND, "MEASURE_TDS")
-            print("ORCHESTRATOR: Menunggu stabilisasi TDS selama 60 detik...")
             time.sleep(60)
-            
-            # Ambil data TDS terakhir setelah menunggu
-            final_tds_reading = latest_readings.get("tds")
-            if final_tds_reading:
-                sql_database_service.insert_sensor_log(final_tds_reading)
-                latest_readings["tds"] = None # Bersihkan setelah disimpan
-            else:
-                print("ORCHESTRATOR: Peringatan - Tidak ada data TDS yang diterima dalam 60 detik.")
 
-            # --- Siklus Pengukuran pH ---
             print("ORCHESTRATOR: Meminta pengukuran pH...")
             client.publish(TOPIC_COMMAND, "MEASURE_PH")
-            print("ORCHESTRATOR: Menunggu stabilisasi pH selama 60 detik...")
             time.sleep(60)
-
-            # Ambil data pH terakhir setelah menunggu
-            final_ph_reading = latest_readings.get("ph")
-            if final_ph_reading:
-                sql_database_service.insert_sensor_log(final_ph_reading)
-                latest_readings["ph"] = None # Bersihkan setelah disimpan
-            else:
-                print("ORCHESTRATOR: Peringatan - Tidak ada data pH yang diterima dalam 60 detik.")
+            
+            # Asumsikan ada perintah untuk sensor DHT22
+            print("ORCHESTRATOR: Meminta pengukuran suhu/kelembapan udara...")
+            client.publish(TOPIC_COMMAND, "MEASURE_DHT22") 
+            time.sleep(60)
 
         except Exception as e:
             print(f"ORCHESTRATOR: Error di thread utama: {e}")
@@ -102,7 +68,7 @@ def start_mqtt_client():
     sql_database_service.initialize_database()
     
     if not all([MQTT_SERVER, MQTT_USERNAME, MQTT_PASSWORD]):
-        print("MQTT: Konfigurasi tidak ditemukan di .env. Layanan MQTT tidak akan dimulai.")
+        print("MQTT: Konfigurasi tidak ditemukan. Layanan MQTT tidak akan dimulai.")
         return
 
     is_debug_mode = os.environ.get('WERKZEUG_RUN_MAIN') == 'true'
