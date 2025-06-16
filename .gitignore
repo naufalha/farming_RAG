@@ -1,0 +1,70 @@
+# NodeJS
+node_modules/
+package-lock.json
+
+# Python
+__pycache__/
+*.pyc
+*.log
+*.jpg
+*.png
+*.pt
+*.tar
+*.zip
+*.7z
+*.h5
+*.onnx
+*.mp4
+venv/
+*.sqlite3
+
+# Flask uploads/cache
+instance/
+.env
+.DS_Store
+
+# YOLO & CV Stuff
+yolo_flask_test/
+kind_wise_test/
+test.jpg
+chroma.log
+chroma_data/
+
+# VSCode or IDE
+.vscode/
+.idea/
+1~# NodeJS
+node_modules/
+package-lock.json
+
+# Python
+__pycache__/
+*.pyc
+*.log
+*.jpg
+*.png
+*.pt
+*.tar
+*.zip
+*.7z
+*.h5
+*.onnx
+*.mp4
+venv/
+*.sqlite3
+
+# Flask uploads/cache
+instance/
+.env
+.DS_Store
+
+# YOLO & CV Stuff
+yolo_flask_test/
+kind_wise_test/
+test.jpg
+chroma.log
+chroma_data/
+
+# VSCode or IDE
+.vscode/
+.idea/
