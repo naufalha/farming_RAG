@@ -13,7 +13,7 @@ def initialize_database():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     cursor = conn.cursor()
-    
+
     # Tabel untuk log sensor lingkungan
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS environment_logs (
@@ -26,18 +26,19 @@ def initialize_database():
             air_humidity REAL
         )
     ''')
-    
-    # Tabel untuk log kondisi tanaman dari robot
+
+    # Tabel untuk log kondisi tanaman
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS plant_conditions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             timestamp DATETIME NOT NULL,
             plant_id INTEGER NOT NULL,
             condition TEXT NOT NULL,
-            diagnosis TEXT
+            diagnosis TEXT,
+            image_url TEXT
         )
     ''')
-    
+
     conn.commit()
     conn.close()
     print("SQL_DB_SERVICE: Database dan tabel v2 siap digunakan.")
@@ -48,7 +49,6 @@ def insert_environment_log(data: dict):
         conn = sqlite3.connect(DB_PATH, check_same_thread=False)
         cursor = conn.cursor()
         
-        # Menggunakan .get() dengan nilai default None agar aman
         cursor.execute('''
             INSERT INTO environment_logs (
                 timestamp, ph, tds, water_temperature, air_temperature, air_humidity
@@ -68,17 +68,19 @@ def insert_environment_log(data: dict):
     except Exception as e:
         print(f"SQL_DB_SERVICE: Gagal menyimpan log lingkungan: {e}")
 
-def insert_plant_condition(plant_id: int, condition: str, diagnosis: str = None):
-    """Menyimpan data kondisi tanaman (untuk digunakan nanti oleh robot)."""
+# --- PERBAIKAN: Menambahkan parameter image_url ke definisi fungsi ---
+def insert_plant_condition(plant_id: int, condition: str, diagnosis: str = None, image_url: str = None):
+    """Menyimpan data kondisi tanaman, termasuk URL gambar."""
     try:
         conn = sqlite3.connect(DB_PATH, check_same_thread=False)
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT INTO plant_conditions (timestamp, plant_id, condition, diagnosis)
-            VALUES (?, ?, ?, ?)
-        ''', (datetime.now(), plant_id, condition, diagnosis))
+            INSERT INTO plant_conditions (timestamp, plant_id, condition, diagnosis, image_url)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (datetime.now(), plant_id, condition, diagnosis, image_url))
         conn.commit()
         conn.close()
         print(f"SQL_DB_SERVICE: Kondisi untuk tanaman ID {plant_id} disimpan.")
     except Exception as e:
         print(f"SQL_DB_SERVICE: Gagal menyimpan kondisi tanaman: {e}")
+

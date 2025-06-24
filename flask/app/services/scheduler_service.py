@@ -1,44 +1,86 @@
-# app/services/scheduler_service.py (Diperbarui)
+# app/services/scheduler_service.py
+# --- Versi Final dengan Jadwal Lengkap dan Logika Startup yang Bersih ---
 
 import schedule
 import time
 import threading
-from . import weather_service, sql_database_service, aggregation_service # <-- Import layanan baru
 
-def daily_weather_job():
-    """Tugas yang dijalankan sekali sehari untuk menyimpan data cuaca ke SQL."""
+# Import semua layanan yang dibutuhkan oleh penjadwal
+from . import (
+    weather_service, 
+    inspection_service, 
+    vector_store_service,
+    remote_control_service
+)
+
+def daily_weather_job(db_collection):
+    """Tugas harian untuk mengambil data cuaca dan menyimpannya ke Vector DB."""
     print("SCHEDULER: Menjalankan tugas harian untuk data cuaca...")
     try:
-        forecast_dict = weather_service.get_daily_forecast_as_dict()
-        if forecast_dict:
-            sql_database_service.insert_weather_log(forecast_dict)
+        forecast_text = weather_service.get_daily_forecast_as_text()
+        if forecast_text:
+            vector_store_service.add_text_to_db(forecast_text, db_collection)
+            print("SCHEDULER: Data cuaca berhasil diambil dan disimpan.")
     except Exception as e:
         print(f"SCHEDULER: Gagal menjalankan tugas cuaca harian: {e}")
 
-def periodic_log_summary_job(db_collection):
-    """Tugas baru untuk membuat ringkasan log secara periodik."""
-    print("SCHEDULER: Menjalankan tugas ringkasan log sensor...")
+def morning_inspection_job(app_context):
+    """Tugas untuk menjalankan inspeksi pagi."""
+    print("SCHEDULER: Memulai tugas inspeksi PAGI...")
     try:
-        aggregation_service.create_and_store_log_summary(db_collection, hours=4)
+        # Menggunakan 'with' untuk memastikan konteks aplikasi ditangani dengan benar
+        with app_context.app_context():
+            inspection_service.run_daily_check(app_context)
     except Exception as e:
-        print(f"SCHEDULER: Gagal menjalankan tugas ringkasan log: {e}")
+        print(f"SCHEDULER: Gagal menjalankan tugas inspeksi pagi: {e}")
 
-def run_scheduler(db_collection):
+def afternoon_inspection_job(app_context):
+    """Tugas untuk menjalankan inspeksi sore."""
+    print("SCHEDULER: Memulai tugas inspeksi SORE...")
+    try:
+        with app_context.app_context():
+            inspection_service.run_daily_check(app_context)
+    except Exception as e:
+        print(f"SCHEDULER: Gagal menjalankan tugas inspeksi sore: {e}")
+        
+def reboot_robot_job():
+    """Tugas untuk me-reboot Raspberry Pi sebagai persiapan inspeksi."""
+    print("SCHEDULER: Menjalankan tugas reboot untuk Raspberry Pi...")
+    try:
+        remote_control_service.reboot_raspi_via_mqtt()
+    except Exception as e:
+        print(f"SCHEDULER: Gagal menjalankan tugas reboot: {e}")
+
+def run_scheduler(app_context, db_collection):
     """Loop utama untuk penjadwal."""
-    # Jalankan tugas sekali saat aplikasi pertama kali dimulai
-    daily_weather_job()
-    periodic_log_summary_job(db_collection)
+    print("SCHEDULER: Penjadwal aktif, menunggu waktu tugas...")
     
-    # Jadwalkan tugas-tugas
-    schedule.every().day.at("02:00", "Asia/Jakarta").do(daily_weather_job)
-    schedule.every(4).hours.do(periodic_log_summary_job, db_collection=db_collection)
+    # --- JADWAL TUGAS ---
+    schedule.every().day.at("05:37", "Asia/Jakarta").do(daily_weather_job, db_collection=db_collection)
     
+    # Jadwal untuk menyalakan robot sebelum inspeksi
+    #schedule.every().day.at("05:40", "Asia/Jakarta").do(reboot_robot_job) # Persiapan inspeksi pagi
+    #schedule.every().day.at("16:05", "Asia/Jakarta").do(reboot_robot_job) # Persiapan inspeksi sore
+    
+    # Jadwal untuk menjalankan inspeksi
+    schedule.every().day.at("06:00", "Asia/Jakarta").do(morning_inspection_job, app_context=app_context)
+    schedule.every().day.at("16:10", "Asia/Jakarta").do(afternoon_inspection_job, app_context=app_context)
+    
+    # --- TUGAS SAAT STARTUP (untuk pengujian) ---
+    # Anda bisa menghapus komentar di bawah ini jika ingin tugas langsung berjalan
+    # saat server pertama kali dinyalakan.
+    #print("SCHEDULER: Menjalankan tugas awal saat startup...")
+    #reboot_robot_job()
+    #time.sleep(120) # Beri waktu Pi untuk boot
+    #morning_inspection_job(app_context)
+
     while True:
         schedule.run_pending()
         time.sleep(60)
 
-def start_scheduler(db_collection):
-    """Memulai thread penjadwal di background."""
-    scheduler_thread = threading.Thread(target=run_scheduler, args=(db_collection,), daemon=True)
+def start_scheduler(app, db_collection):
+    """Memulai thread penjadwal dengan membawa konteks aplikasi dan koleksi DB."""
+    scheduler_thread = threading.Thread(target=run_scheduler, args=(app, db_collection,), daemon=True)
     scheduler_thread.start()
-    print("SCHEDULER: Layanan penjadwal berhasil dimulai dengan tugas cuaca dan agregasi.")
+    print("SCHEDULER: Layanan penjadwal berhasil dimulai.")
+

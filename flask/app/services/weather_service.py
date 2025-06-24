@@ -1,10 +1,13 @@
 # app/services/weather_service.py
-# --- Layanan untuk Mengambil Data Prakiraan Cuaca dari Open-Meteo ---
+# --- Versi yang Dioptimalkan untuk Penjadwal dan Vector DB ---
 
 import openmeteo_requests
 import requests_cache
 import pandas as pd
 from retry_requests import retry
+import locale
+from datetime import datetime
+import pytz
 
 # --- Konfigurasi ---
 LATITUDE = -7.6364
@@ -16,31 +19,12 @@ cache_session = requests_cache.CachedSession('.cache', expire_after=3600)
 retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
 openmeteo = openmeteo_requests.Client(session=retry_session)
 
-
-def _format_weather_summary(forecast_data: dict) -> str:
-    """Fungsi helper untuk mengubah data cuaca menjadi kalimat ringkasan."""
-    try:
-        date_str = forecast_data['date'].strftime("%A, %d %B %Y")
-        temp_max = forecast_data['temperature_2m_max']
-        temp_min = forecast_data['temperature_2m_min']
-        uv_index = forecast_data['uv_index_max']
-        precipitation = forecast_data['precipitation_sum']
-
-        summary = (
-            f"Prakiraan cuaca untuk {date_str}: Suhu antara {temp_min:.1f}°C dan {temp_max:.1f}°C, "
-            f"dengan curah hujan {precipitation:.1f} mm dan indeks UV maksimal {uv_index:.1f}."
-        )
-        return summary
-    except (KeyError, AttributeError) as e:
-        return f"Gagal memformat ringkasan cuaca: {e}"
-
-
-def get_daily_forecast_as_dict() -> dict | None:
+def get_daily_forecast_as_text() -> str | None:
     """
-    Mengambil data cuaca harian dan mengembalikannya sebagai dictionary
-    yang siap disimpan ke database SQL.
+    Mengambil data cuaca harian dan mengembalikannya sebagai satu kalimat
+    lengkap yang siap disimpan ke Vector DB.
     """
-    print("WEATHER_SERVICE: Mengambil prakiraan cuaca harian...")
+    print("WEATHER_SERVICE: Menjalankan pengambilan prakiraan cuaca harian...")
     url = "https://api.open-meteo.com/v1/forecast"
     params = {
         "latitude": LATITUDE,
@@ -50,34 +34,30 @@ def get_daily_forecast_as_dict() -> dict | None:
         "forecast_days": 1
     }
     try:
-        responses = openmeteo.weather_api(url, params=params)
-        response = responses[0]
-
+        response = openmeteo.weather_api(url, params=params)[0]
         daily = response.Daily()
 
-        # Mengonversi timestamp awal menjadi objek tanggal tunggal
-        date = pd.to_datetime(daily.Time(), unit="s", utc=True).date()
+        # Atur locale untuk nama hari/bulan dalam Bahasa Indonesia
+        try:
+            locale.setlocale(locale.LC_TIME, 'id_ID.UTF-8')
+        except locale.Error:
+            print("Peringatan: locale 'id_ID.UTF-8' tidak ditemukan. Menggunakan format default.")
 
-        # Ambil nilai cuaca. Karena forecast_days=1, setiap array hanya punya satu elemen.
+        # Ambil dan format data
+        date = pd.to_datetime(daily.Time(), unit="s", utc=True).date()
+        date_str = date.strftime("%A, %d %B %Y")
         temp_max = daily.Variables(0).ValuesAsNumpy()[0]
         temp_min = daily.Variables(1).ValuesAsNumpy()[0]
         uv_index = daily.Variables(2).ValuesAsNumpy()[0]
-        precipitation_sum = daily.Variables(3).ValuesAsNumpy()[0]
+        precipitation = daily.Variables(3).ValuesAsNumpy()[0]
 
-        # Susun dictionary hasil akhir
-        today_forecast = {
-            "date": date,
-            "temperature_2m_max": temp_max,
-            "temperature_2m_min": temp_min,
-            "uv_index_max": uv_index,
-            "precipitation_sum": precipitation_sum,
-        }
-        
-        # --- PERUBAHAN: Menampilkan ringkasan yang sudah dikonversi di log ---
-        summary_text = _format_weather_summary(today_forecast)
-        print(f"WEATHER_SERVICE: {summary_text}")
-        
-        return today_forecast
+        # Buat kalimat ringkasan yang kaya konteks
+        summary = (
+            f"Prakiraan cuaca untuk {date_str}: Suhu diperkirakan berkisar antara {temp_min:.1f}°C hingga {temp_max:.1f}°C. "
+            f"Total curah hujan sekitar {precipitation:.1f} mm. Indeks UV maksimal hari ini adalah {uv_index:.1f}, yang termasuk kategori tinggi."
+        )
+        print(f"WEATHER_SERVICE: Prakiraan cuaca dibuat -> {summary}")
+        return summary
 
     except Exception as e:
         print(f"WEATHER_SERVICE: Gagal mengambil data cuaca harian: {e}")
