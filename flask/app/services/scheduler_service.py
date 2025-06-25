@@ -1,5 +1,5 @@
 # app/services/scheduler_service.py
-# --- Versi Final dengan Jadwal Lengkap dan Logika Startup yang Bersih ---
+# --- Versi Final dengan Penanganan Konteks dan Argumen yang Benar ---
 
 import schedule
 import time
@@ -66,13 +66,13 @@ def run_scheduler(app_context, db_collection):
     schedule.every().day.at("06:00", "Asia/Jakarta").do(morning_inspection_job, app_context=app_context)
     schedule.every().day.at("16:10", "Asia/Jakarta").do(afternoon_inspection_job, app_context=app_context)
     
-    # --- TUGAS SAAT STARTUP (untuk pengujian) ---
+    # --- PERBAIKAN: Memanggil tugas startup dengan argumen yang benar ---
     # Anda bisa menghapus komentar di bawah ini jika ingin tugas langsung berjalan
     # saat server pertama kali dinyalakan.
-    #print("SCHEDULER: Menjalankan tugas awal saat startup...")
-    #reboot_robot_job()
-    #time.sleep(120) # Beri waktu Pi untuk boot
-    #morning_inspection_job(app_context)
+    print("SCHEDULER: Menjalankan tugas awal saat startup...")
+    # daily_weather_job(db_collection)
+    #afternoon_inspection_job(app_context)
+    # morning_inspection_job(app_context) # Hanya perlu satu argumen
 
     while True:
         schedule.run_pending()
