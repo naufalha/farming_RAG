@@ -93,6 +93,7 @@ def get_summary_endpoint():
 @api_bp.route('/analyze-image', methods=['POST'])
 def analyze_image_endpoint():
     """Endpoint untuk analisis gambar."""
+    print("analyizing")
     data = request.get_json()
     if not data or 'image_data' not in data or 'chat_id' not in data:
         return jsonify({"error": "Request body harus berisi 'image_data' dan 'chat_id'"}), 400

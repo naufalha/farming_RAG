@@ -1,3 +1,20 @@
-2025/06/26-04:36:49.958 3fe31 Reusing MANIFEST /home/nopal/farming_RAG/mubarok-botjs/.wwebjs_auth/session/Default/Local Storage/leveldb/MANIFEST-000001
-2025/06/26-04:36:49.958 3fe31 Recovering log #51
-2025/06/26-04:36:49.958 3fe31 Reusing old log /home/nopal/farming_RAG/mubarok-botjs/.wwebjs_auth/session/Default/Local Storage/leveldb/000051.log 
+2025/06/28-15:23:27.497 5c2 Reusing MANIFEST /home/nopal/farming_RAG/mubarok-botjs/.wwebjs_auth/session/Default/Local Storage/leveldb/MANIFEST-000001
+2025/06/28-15:23:27.500 5c2 Recovering log #57
+2025/06/28-15:23:27.501 5c2 Level-0 table #60: started
+2025/06/28-15:23:27.505 5c2 Level-0 table #60: 11686 bytes OK
+2025/06/28-15:23:27.508 5c2 Delete type=0 #57
+2025/06/28-15:23:27.509 5c8 Compacting 4@0 + 1@1 files
+2025/06/28-15:23:27.520 5c8 Generated table #62@0: 199 keys, 7568 bytes
+2025/06/28-15:23:27.520 5c8 Compacted 4@0 + 1@1 files => 7568 bytes
+2025/06/28-15:23:27.524 5c8 compacted to: files[ 0 1 1 0 0 0 0 ]
+2025/06/28-15:23:27.524 5c8 Delete type=2 #52
+2025/06/28-15:23:27.524 5c8 Delete type=2 #58
+2025/06/28-15:23:27.524 5c8 Delete type=2 #50
+2025/06/28-15:23:27.524 5c8 Delete type=2 #60
+2025/06/28-15:23:27.524 5c8 Delete type=2 #55
+2025/06/29-07:44:19.566 1cc4 Level-0 table #64: started
+2025/06/29-07:44:19.568 1cc4 Level-0 table #64: 10711 bytes OK
+2025/06/29-07:44:19.569 1cc4 Delete type=0 #61
+2025/06/29-19:44:51.150 2daf Level-0 table #66: started
+2025/06/29-19:44:51.152 2daf Level-0 table #66: 12407 bytes OK
+2025/06/29-19:44:51.153 2daf Delete type=0 #63

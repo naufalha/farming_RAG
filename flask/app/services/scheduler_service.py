@@ -72,7 +72,7 @@ def run_scheduler(app_context, db_collection):
     print("SCHEDULER: Menjalankan tugas awal saat startup...")
     # daily_weather_job(db_collection)
     #afternoon_inspection_job(app_context)
-    # morning_inspection_job(app_context) # Hanya perlu satu argumen
+    #morning_inspection_job(app_context) # Hanya perlu satu argumen
 
     while True:
         schedule.run_pending()
