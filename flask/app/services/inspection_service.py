@@ -1,32 +1,30 @@
 # app/services/inspection_service.py
-# --- Versi Final dengan Alur Kerja yang Benar dan Lengkap ---
+# --- Versi yang menyimpan hasil inspeksi ke InfluxDB ---
 
 import os
 import time
 import json
 from flask import current_app
 
-# --- PERBAIKAN: Menambahkan weather_service ke dalam import ---
+# --- PERUBAHAN: Ganti sql_database_service dengan influxdb_service ---
 from . import (
     robot_service, 
     yolo_service, 
     kindwise_service, 
-    sql_database_service, 
+    influxdb_service, # <-- Menggunakan layanan InfluxDB
     notification_service,
     rag_service,
     remote_control_service,
     weather_service 
 )
 
-def run_daily_check(app_context, plant_ids_to_check: list[int] = [1,2,3,4,5,6,7,8,9,10,11,12,13,14]):
+def run_daily_check(app_context, plant_ids_to_check: list[int] = [1]):
     """
-    Orkestrator utama yang menjalankan inspeksi, lalu memarkirkan dan mematikan robot.
+    Orkestrator utama yang menjalankan inspeksi dan menyimpan hasilnya ke InfluxDB.
     """
-    print("INSPECTION_SERVICE: Menunggu 15 detik sebelum memulai inspeksi...")
-    time.sleep(15)
-
     print(f"INSPECTION_SERVICE: Memulai inspeksi harian untuk tanaman ID: {plant_ids_to_check}...")
-    unhealthy_plants, healthy_plants_images = [], []
+    unhealthy_plants = []
+    healthy_plants_images = []
 
     for plant_id in plant_ids_to_check:
         print(f"\n--- Memeriksa Tanaman ID: {plant_id} ---")
@@ -34,7 +32,8 @@ def run_daily_check(app_context, plant_ids_to_check: list[int] = [1,2,3,4,5,6,7,
         image_result = robot_service.get_latest_plant_image(plant_id, app_context)
         
         if not image_result:
-            print(f"INSPECTION_SERVICE: Gagal mengambil gambar untuk tanaman {plant_id}.")
+            print(f"INSPECTION_SERVICE: Gagal mengambil gambar untuk tanaman {plant_id}. Melanjutkan...")
+            time.sleep(10)
             continue
         
         local_path, _ = image_result
@@ -54,7 +53,8 @@ def run_daily_check(app_context, plant_ids_to_check: list[int] = [1,2,3,4,5,6,7,
         else:
             healthy_plants_images.append(local_path)
             
-        sql_database_service.insert_plant_condition(
+        # --- PERUBAHAN UTAMA: Menyimpan ke InfluxDB ---
+        influxdb_service.insert_plant_condition_log(
             plant_id=plant_id, 
             condition=condition,
             diagnosis=diagnosis_text, 
@@ -64,7 +64,7 @@ def run_daily_check(app_context, plant_ids_to_check: list[int] = [1,2,3,4,5,6,7,
         print(f"INSPECTION_SERVICE: Proses untuk tanaman {plant_id} selesai. Jeda...")
         time.sleep(15)
 
-    # --- PEMBUATAN & PENGIRIMAN LAPORAN ---
+    # --- PEMBUATAN & PENGIRIMAN LAPORAN (Tidak Berubah) ---
     greenhouse_summary = rag_service.get_greenhouse_summary_for_report(app_context)
     weather_forecast = weather_service.get_daily_forecast_as_text()
     
@@ -95,11 +95,11 @@ def run_daily_check(app_context, plant_ids_to_check: list[int] = [1,2,3,4,5,6,7,
     notification_service.send_report(final_report_message, image_to_send)
     print("INSPECTION_SERVICE: Inspeksi dan pengiriman laporan selesai.")
     
-    # --- SIKLUS AKHIR ROBOT ---
+    # --- SIKLUS AKHIR ROBOT (Tidak Berubah) ---
     print("INSPECTION_SERVICE: Memulai siklus akhir untuk robot...")
     time.sleep(10)
     remote_control_service.return_robot_to_home()
     
-    #print("INSPECTION_SERVICE: Menunggu 1 menit sebelum mematikan Raspberry Pi...")
-    #time.sleep(60)
-    #remote_control_service.shutdown_raspi_via_ssh()
+    # print("INSPECTION_SERVICE: Menunggu 1 menit sebelum mematikan Raspberry Pi...")
+    # time.sleep(60)
+    # remote_control_service.shutdown_raspi_via_ssh()

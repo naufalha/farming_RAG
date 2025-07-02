@@ -1,14 +1,12 @@
 # app/services/rag_service.py
-# --- Versi 3: Menggunakan Agent yang bisa memilih alat (SQL atau Vector DB) ---
+# --- Versi 4: Menggunakan Agent yang bisa memilih antara InfluxDB dan Vector DB ---
 
 import os
-from . import sql_database_service, vector_store_service
+from . import influxdb_service, vector_store_service
 from datetime import datetime
 
-# Import komponen yang dibutuhkan untuk Agent dan fungsi lain
+# Import komponen yang dibutuhkan untuk Agent
 from langchain_openai import ChatOpenAI
-from langchain_community.utilities import SQLDatabase
-from langchain_community.agent_toolkits import create_sql_agent
 from langchain.agents import Tool, create_openai_tools_agent, AgentExecutor
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder, PromptTemplate
 from langchain.memory import ConversationBufferWindowMemory
@@ -21,8 +19,6 @@ llm = ChatOpenAI(
     openai_api_base=os.getenv("DEEPSEEK_API_BASE", "https://api.deepseek.com/v1"),
     temperature=0.1
 )
-db_uri = f"sqlite:///{sql_database_service.DB_PATH}"
-db = SQLDatabase.from_uri(db_uri)
 
 # --- Manajemen Memori Percakapan ---
 conversation_memory_store = {}
@@ -38,12 +34,66 @@ def get_or_create_memory(chat_id: str):
 
 # --- Definisikan "Alat" yang Bisa Digunakan Agent ---
 
-# Alat 1: SQL Agent
-sql_agent_executor = create_sql_agent(llm=llm, db=db, agent_type="openai-tools", verbose=True)
-sql_tool = Tool(
-    name="database_pertanian_lokal",
-    func=sql_agent_executor.invoke,
-    description="Gunakan untuk menjawab pertanyaan tentang data sensor spesifik (pH, TDS, suhu, kelembapan), prakiraan cuaca, dan kondisi tanaman dari database internal."
+# Alat 1: InfluxDB Query Tool
+def query_influxdb(question: str) -> str:
+    """
+    Menggunakan LLM untuk menerjemahkan pertanyaan bahasa alami menjadi kueri Flux,
+    menjalankannya di InfluxDB, dan mengembalikan hasilnya sebagai teks.
+    """
+    print(f"INFLUX_TOOL: Menerjemahkan pertanyaan ke kueri Flux -> '{question}'")
+    
+    flux_prompt_template = """
+    Anda adalah seorang ahli bahasa kueri Flux untuk InfluxDB.
+    Berdasarkan pertanyaan pengguna dan skema database, buatlah satu kueri Flux yang paling sesuai.
+    Hanya kembalikan kueri Flux saja, tanpa penjelasan tambahan.
+
+    Skema Database:
+    - Measurement `ph_logs`: fields(value, temperature), tags(location)
+    - Measurement `tds_logs`: fields(value, temperature), tags(location)
+    - Measurement `dht_logs`: fields(air_temperature, air_humidity), tags(location)
+    - Measurement `plant_conditions`: fields(diagnosis, image_url), tags(plant_id, condition)
+    
+    Contoh:
+    Pertanyaan: Berapa nilai pH terakhir?
+    Kueri Flux: from(bucket: "smart_farm_data") |> range(start: -1d) |> filter(fn: (r) => r._measurement == "ph_logs") |> last() |> keep(columns: ["_value"])
+
+    Pertanyaan: {question}
+    Kueri Flux:
+    """
+    prompt = PromptTemplate.from_template(flux_prompt_template)
+    flux_chain = LLMChain(llm=llm, prompt=prompt)
+    
+    # PERBAIKAN: Menggunakan .invoke() dan mengambil hasil 'text'
+    flux_query_result = flux_chain.invoke({"question": question})
+    flux_query = flux_query_result.get('text', '').strip()
+    
+    print(f"INFLUX_TOOL: Kueri Flux yang dibuat ->\n{flux_query}")
+
+    try:
+        # --- PERBAIKAN UTAMA: Membuat query_api dari klien yang sudah ada ---
+        if not influxdb_service.client:
+            return "Koneksi ke database InfluxDB belum siap."
+
+        query_api = influxdb_service.client.query_api()
+        tables = query_api.query(flux_query, org=influxdb_service.INFLUX_ORG)
+        
+        results = []
+        for table in tables:
+            for record in table.records:
+                time_str = record.get_time().strftime('%Y-%m-%d %H:%M:%S')
+                field = record.get_field()
+                value = record.get_value()
+                results.append(f"Pada {time_str}, tercatat {field} = {value}")
+        
+        return "\n".join(results) if results else "Tidak ada data yang ditemukan untuk pertanyaan tersebut."
+    except Exception as e:
+        print(f"INFLUX_TOOL: Gagal menjalankan kueri Flux: {e}")
+        return "Gagal mengambil data dari database sensor."
+
+influxdb_tool = Tool(
+    name="database_sensor_influxdb",
+    func=query_influxdb,
+    description="Gunakan alat ini untuk menjawab pertanyaan tentang data sensor spesifik (pH, TDS, suhu, kelembapan) dan kondisi tanaman dari database InfluxDB. Sangat baik untuk data terbaru, rata-rata, min/max."
 )
 
 # Alat 2: Vector Store Retriever
@@ -52,74 +102,34 @@ def vector_search(query: str, db_collection):
     return "\n".join(vector_store_service.search_db(query, db_collection, n_results=3))
 
 def create_vector_tool(db_collection):
-    """Membuat Tool untuk database vektor."""
     return Tool(
         name="database_pengetahuan_pdf",
         func=lambda query: vector_search(query, db_collection),
-        description="Gunakan untuk menjawab pertanyaan umum, teoritis, atau mencari informasi **deskriptif** dari dokumen PDF dan **ringkasan data yang tersimpan, seperti ringkasan prakiraan cuaca harian**."
+        description="Gunakan alat ini untuk menjawab pertanyaan umum, teoritis, atau berdasarkan dokumen pengetahuan (PDF) dan ringkasan data yang telah di-upload."
     )
 
-# --- PERUBAHAN 1: Sapaan Perkenalan untuk Pengguna Baru ---
-def get_new_user_greeting():
-    """Mengembalikan teks perkenalan standar untuk pengguna baru."""
-    return """Halo! Saya Rifai, asisten AI dari Mubarok Farm, siap membantu Anda mengelola greenhouse hidroponik Pakcoy.
-
-Berikut beberapa hal utama yang bisa saya lakukan:
-1.  **Analisis Kesehatan Tanaman**: Kirimkan foto tanaman Pakcoy, dan saya akan menganalisis kondisinya untuk Anda.
-2.  **Tanya Jawab Data**: Tanyakan tentang data sensor terakhir, rata-rata pH, atau kondisi cuaca. Contoh: "Berapa TDS terakhir?"
-3.  **Tambah Pengetahuan**: Kirimkan file PDF berisi panduan atau riset, dan saya akan mempelajarinya untuk menjawab pertanyaan Anda di masa depan.
-4.  **Laporan Harian**: Secara otomatis, saya akan mengirimkan laporan inspeksi tanaman setiap pagi.
-
-Ada yang bisa saya bantu sekarang?"""
-
-
-# --- PERUBAHAN 2: Prompt Utama yang Dioptimalkan ---
+# --- Prompt Utama untuk Router Agent ---
 MAIN_PROMPT = ChatPromptTemplate.from_messages([
     ("system", f"""
-    Anda adalah **Rifai**, asisten AI yang merupakan seorang spesialis untuk **greenhouse hidroponik** yang fokus pada tanaman **Pakcoy**.
-    Waktu saat ini adalah {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.
-
-    Tugas utama Anda adalah menjawab pertanyaan pengguna dengan alur prioritas berikut:
-    1.  **Gunakan Alat Internal Dahulu**: Selalu coba jawab pertanyaan dengan menggunakan alat yang tersedia (`database_pertanian_lokal` atau `database_pengetahuan_pdf`).
-    2.  **Gunakan Pengetahuan Umum Jika Perlu**: Jika kedua alat di atas tidak memberikan hasil yang relevan, baru gunakan pengetahuan umum Anda untuk menjawab dan beritahu pengguna.
-
-    Aturan Jawaban:
-    - Selalu jawab dalam Bahasa Indonesia yang ramah dan profesional.
-    - PENTING: Jika pengguna meminta foto dan Anda menemukan path file gambar, jawaban akhir Anda HARUS HANYA path file tersebut saja.
+    Anda adalah Rifai, asisten AI spesialis hidroponik Pakcoy. Pilih alat yang paling tepat untuk menjawab pertanyaan. Waktu saat ini: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.
+    - Untuk pertanyaan tentang data sensor real-time (pH, TDS, suhu), kondisi tanaman, atau agregasi data (rata-rata, min, max), gunakan `database_sensor_influxdb`.
+    - Untuk pertanyaan tentang pengetahuan umum, panduan dari dokumen, atau ringkasan cuaca, gunakan `database_pengetahuan_pdf`.
+    - Jika pengguna meminta foto, gunakan `database_sensor_influxdb` untuk mencari path gambar di measurement `plant_conditions`. Jawaban akhir Anda HARUS HANYA path file tersebut saja.
     """),
     MessagesPlaceholder(variable_name="chat_history"),
     ("user", "{input}"),
     MessagesPlaceholder(variable_name="agent_scratchpad"),
 ])
 
-
-# --- PERUBAHAN 3: Logika Baru di Fungsi Utama ---
+# --- Fungsi Utama ---
 def get_rag_response(question: str, db_collection, chat_id: str):
-    """Menjawab pertanyaan pengguna dengan logika baru untuk pengguna baru."""
-    print(f"ROUTER_AGENT: Menerima pertanyaan dari {chat_id} -> '{question}'")
-    
-    # Cek apakah ini pengguna baru dan pertanyaannya umum
-    is_new_user = chat_id not in conversation_memory_store
-    help_keywords = ["apa saja", "bisa apa", "bantuan", "help", "fitur", "kamu siapa"]
-    is_help_request = any(keyword in question.lower() for keyword in help_keywords)
-
-    if is_new_user and is_help_request:
-        print(f"ROUTER_AGENT: Menangani permintaan bantuan dari pengguna baru: {chat_id}")
-        return get_new_user_greeting()
-
-    # Jika bukan, lanjutkan dengan alur kerja Agent seperti biasa
     memory = get_or_create_memory(chat_id)
-    tools = [sql_tool, create_vector_tool(db_collection)]
+    tools = [influxdb_tool, create_vector_tool(db_collection)]
     
     agent = create_openai_tools_agent(llm, tools, MAIN_PROMPT)
     agent_executor = AgentExecutor(
-        agent=agent, 
-        tools=tools, 
-        verbose=True, 
-        memory=memory,
-        handle_parsing_errors=True
+        agent=agent, tools=tools, verbose=True, memory=memory, handle_parsing_errors=True
     )
-
     try:
         result = agent_executor.invoke({"input": question})
         return result.get("output", "Maaf, saya tidak dapat menemukan jawaban.")
@@ -127,66 +137,29 @@ def get_rag_response(question: str, db_collection, chat_id: str):
         print(f"ROUTER_AGENT: Gagal menjalankan agent: {e}")
         return "Maaf, terjadi kesalahan saat saya memproses permintaan Anda."
 
-# --- FUNGSI SUMMARIZE_TEXT (DITAMBAHKAN KEMBALI) ---
+# --- Fungsi Tambahan (Dipertahankan) ---
 def summarize_text(text_chunk: str) -> str:
-    """Meringkas sebuah potongan teks menggunakan LLM."""
     print("LANGCHAIN_SUMMARIZER: Memulai proses peringkasan...")
-    template = """
-    Anda adalah seorang asisten yang ahli membuat ringkasan.
-    Berdasarkan teks berikut, buatlah satu ringkasan singkat (2-3 kalimat) yang menjelaskan isi utamanya dalam Bahasa Indonesia.
-
-    Teks:
-    {text}
-
-    Ringkasan Singkat:
-    """
+    template = "Anda adalah asisten ahli ringkasan. Buat ringkasan singkat (2-3 kalimat) dari teks berikut dalam Bahasa Indonesia:\n\nTeks:\n{text}\n\nRingkasan Singkat:"
     prompt = PromptTemplate.from_template(template)
-    
-    # Menggunakan LLMChain sederhana khusus untuk tugas ini
     summarizer_chain = LLMChain(llm=llm, prompt=prompt)
-    
     try:
-        summary = summarizer_chain.run(text=text_chunk)
-        print(f"LANGCHAIN_SUMMARIZER: Ringkasan dibuat -> '{summary}'")
-        return summary
+        # PERBAIKAN: Menggunakan .invoke()
+        summary_result = summarizer_chain.invoke({"text": text_chunk})
+        return summary_result.get('text', 'Gagal membuat ringkasan.')
     except Exception as e:
         print(f"LANGCHAIN_SUMMARIZER: Gagal membuat ringkasan: {e}")
         return "Gagal membuat ringkasan dokumen."
-# app/services/rag_service.py
-# ... (kode lain tetap sama) ...
 
 def get_greenhouse_summary_for_report(app_context):
-    """
-    Membuat ringkasan kondisi greenhouse menggunakan konteks aplikasi yang diberikan.
-    """
-    print("RAG_SERVICE: Membuat ringkasan analitis kondisi greenhouse...")
+    print("RAG_SUMMARY: Membuat ringkasan kondisi greenhouse terbaru...")
+    summary_question = "Berikan saya ringkasan kondisi greenhouse terkini berdasarkan data pH, TDS, dan cuaca terakhir."
     
-    summary_question = """
-    Berdasarkan data di tabel environment_logs dan weather_logs, berikan ringkasan data terbaru untuk parameter berikut: 
-    pH, TDS, suhu air (water_temperature), suhu udara (air_temperature), kelembapan udara (air_humidity), dan prakiraan curah hujan (precipitation_sum).
-    """
-    
-    try:
-        # --- PERUBAHAN: Menjalankan agent di dalam konteks aplikasi ---
-        with app_context.app_context():
-            sql_agent_executor = create_sql_agent(
-                llm=llm, db=db, agent_type="openai-tools", verbose=False
-            )
-            data_summary = sql_agent_executor.invoke({"input": summary_question}).get("output")
-            
-            analysis_prompt = f"""
-            Anda adalah Mubarok, seorang ahli agronomi. Berdasarkan data berikut:
-            ---
-            {data_summary}
-            ---
-            Berikan kesimpulan singkat (2-3 kalimat) mengenai kondisi greenhouse saat ini dan dampaknya pada tanaman Pakcoy.
-            """
-            final_analysis = llm.invoke(analysis_prompt).content
-            return final_analysis
-
-    except Exception as e:
-        print(f"RAG_SERVICE: Gagal membuat ringkasan greenhouse: {e}")
-        return "Tidak dapat menganalisis kondisi greenhouse saat ini."
-
-# (fungsi get_rag_response dan lainnya tidak perlu diubah)
-# ...
+    with app_context.app_context():
+        db_collection = vector_store_service.setup_vector_store()
+        dummy_chat_id = "summary_task"
+        if dummy_chat_id in conversation_memory_store:
+            del conversation_memory_store[dummy_chat_id]
+        
+        summary = get_rag_response(summary_question, db_collection, dummy_chat_id)
+        return summary

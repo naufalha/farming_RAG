@@ -1,20 +1,27 @@
-2025/06/28-15:23:27.497 5c2 Reusing MANIFEST /home/nopal/farming_RAG/mubarok-botjs/.wwebjs_auth/session/Default/Local Storage/leveldb/MANIFEST-000001
-2025/06/28-15:23:27.500 5c2 Recovering log #57
-2025/06/28-15:23:27.501 5c2 Level-0 table #60: started
-2025/06/28-15:23:27.505 5c2 Level-0 table #60: 11686 bytes OK
-2025/06/28-15:23:27.508 5c2 Delete type=0 #57
-2025/06/28-15:23:27.509 5c8 Compacting 4@0 + 1@1 files
-2025/06/28-15:23:27.520 5c8 Generated table #62@0: 199 keys, 7568 bytes
-2025/06/28-15:23:27.520 5c8 Compacted 4@0 + 1@1 files => 7568 bytes
-2025/06/28-15:23:27.524 5c8 compacted to: files[ 0 1 1 0 0 0 0 ]
-2025/06/28-15:23:27.524 5c8 Delete type=2 #52
-2025/06/28-15:23:27.524 5c8 Delete type=2 #58
-2025/06/28-15:23:27.524 5c8 Delete type=2 #50
-2025/06/28-15:23:27.524 5c8 Delete type=2 #60
-2025/06/28-15:23:27.524 5c8 Delete type=2 #55
-2025/06/29-07:44:19.566 1cc4 Level-0 table #64: started
-2025/06/29-07:44:19.568 1cc4 Level-0 table #64: 10711 bytes OK
-2025/06/29-07:44:19.569 1cc4 Delete type=0 #61
-2025/06/29-19:44:51.150 2daf Level-0 table #66: started
-2025/06/29-19:44:51.152 2daf Level-0 table #66: 12407 bytes OK
-2025/06/29-19:44:51.153 2daf Delete type=0 #63
+2025/06/30-11:14:11.056 5d1 Reusing MANIFEST /home/nopal/farming_RAG/mubarok-botjs/.wwebjs_auth/session/Default/Local Storage/leveldb/MANIFEST-000001
+2025/06/30-11:14:11.059 5d1 Recovering log #65
+2025/06/30-11:14:11.061 5d1 Reusing old log /home/nopal/farming_RAG/mubarok-botjs/.wwebjs_auth/session/Default/Local Storage/leveldb/000065.log 
+2025/06/30-11:54:20.947 87c Level-0 table #69: started
+2025/06/30-11:54:20.949 87c Level-0 table #69: 11725 bytes OK
+2025/06/30-11:54:20.950 87c Delete type=0 #65
+2025/07/01-02:45:14.922 59fb Level-0 table #71: started
+2025/07/01-02:45:14.924 59fb Level-0 table #71: 11222 bytes OK
+2025/07/01-02:45:14.925 59fb Delete type=0 #68
+2025/07/01-02:45:14.925 59fb Compacting 4@0 + 1@1 files
+2025/07/01-02:45:14.926 59fb Generated table #72@0: 219 keys, 7804 bytes
+2025/07/01-02:45:14.926 59fb Compacted 4@0 + 1@1 files => 7804 bytes
+2025/07/01-02:45:14.927 59fb compacted to: files[ 0 1 1 0 0 0 0 ]
+2025/07/01-02:45:14.928 59fb Delete type=2 #64
+2025/07/01-02:45:14.928 59fb Delete type=2 #71
+2025/07/01-02:45:14.928 59fb Delete type=2 #66
+2025/07/01-02:45:14.928 59fb Delete type=2 #62
+2025/07/01-02:45:14.928 59fb Delete type=2 #69
+2025/07/01-12:55:42.360 92a5 Level-0 table #74: started
+2025/07/01-12:55:42.362 92a5 Level-0 table #74: 11428 bytes OK
+2025/07/01-12:55:42.363 92a5 Delete type=0 #70
+2025/07/02-02:56:22.098 d6cc Level-0 table #76: started
+2025/07/02-02:56:22.100 d6cc Level-0 table #76: 11543 bytes OK
+2025/07/02-02:56:22.101 d6cc Delete type=0 #73
+2025/07/02-16:26:59.138 11049 Level-0 table #78: started
+2025/07/02-16:26:59.139 11049 Level-0 table #78: 11378 bytes OK
+2025/07/02-16:26:59.140 11049 Delete type=0 #75

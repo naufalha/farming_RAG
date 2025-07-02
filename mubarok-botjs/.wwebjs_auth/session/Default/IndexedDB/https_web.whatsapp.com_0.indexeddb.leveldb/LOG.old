@@ -1,23 +1,23 @@
-2025/06/28-15:15:29.226 5bb Reusing MANIFEST /home/nopal/farming_RAG/mubarok-botjs/.wwebjs_auth/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
-2025/06/28-15:15:29.227 5bb Recovering log #847
-2025/06/28-15:15:29.269 5bb Reusing old log /home/nopal/farming_RAG/mubarok-botjs/.wwebjs_auth/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/000847.log 
-2025/06/28-15:15:31.007 5b3 Level-0 table #857: started
-2025/06/28-15:15:31.019 5b3 Level-0 table #857: 562679 bytes OK
-2025/06/28-15:15:31.020 5b3 Delete type=0 #847
-2025/06/28-15:15:31.020 5b3 Manual compaction at level-0 from '\x00\xaf\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\xb0\x00\x00\x00' @ 0 : 0; will stop at (end)
-2025/06/28-15:15:33.502 5ca Compacting 1@1 + 6@2 files
-2025/06/28-15:15:33.612 5ca Generated table #858@1: 86534 keys, 2237271 bytes
-2025/06/28-15:15:33.706 5ca Generated table #859@1: 88036 keys, 2276130 bytes
-2025/06/28-15:15:33.748 5ca Generated table #860@1: 14126 keys, 2155604 bytes
-2025/06/28-15:15:33.789 5ca Generated table #861@1: 16224 keys, 2152793 bytes
-2025/06/28-15:15:33.896 5ca Generated table #862@1: 89331 keys, 2236880 bytes
-2025/06/28-15:15:33.936 5ca Generated table #863@1: 33600 keys, 689191 bytes
-2025/06/28-15:15:33.936 5ca Compacted 1@1 + 6@2 files => 11747869 bytes
-2025/06/28-15:15:33.937 5ca compacted to: files[ 0 0 6 0 0 0 0 ]
-2025/06/28-15:15:33.938 5ca Delete type=2 #850
-2025/06/28-15:15:33.938 5ca Delete type=2 #854
-2025/06/28-15:15:33.938 5ca Delete type=2 #857
-2025/06/28-15:15:33.938 5ca Delete type=2 #851
-2025/06/28-15:15:33.938 5ca Delete type=2 #853
-2025/06/28-15:15:33.938 5ca Delete type=2 #852
-2025/06/28-15:15:33.938 5ca Delete type=2 #849
+2025/06/30-02:04:52.328 5bc Reusing MANIFEST /home/nopal/farming_RAG/mubarok-botjs/.wwebjs_auth/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2025/06/30-02:04:52.329 5bc Recovering log #915
+2025/06/30-02:04:52.341 5bc Reusing old log /home/nopal/farming_RAG/mubarok-botjs/.wwebjs_auth/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/000915.log 
+2025/06/30-02:04:54.194 5bb Level-0 table #925: started
+2025/06/30-02:04:54.198 5bb Level-0 table #925: 183435 bytes OK
+2025/06/30-02:04:54.199 5bb Delete type=0 #915
+2025/06/30-02:04:54.199 5df Manual compaction at level-0 from '\x00\xb4\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\xb5\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/06/30-02:04:56.527 5e1 Compacting 1@1 + 6@2 files
+2025/06/30-02:04:56.624 5e1 Generated table #926@1: 87380 keys, 2238709 bytes
+2025/06/30-02:04:56.715 5e1 Generated table #927@1: 98600 keys, 2262111 bytes
+2025/06/30-02:04:56.752 5e1 Generated table #928@1: 15914 keys, 2186376 bytes
+2025/06/30-02:04:56.789 5e1 Generated table #929@1: 19290 keys, 2166017 bytes
+2025/06/30-02:04:56.868 5e1 Generated table #930@1: 62704 keys, 2200338 bytes
+2025/06/30-02:04:56.923 5e1 Generated table #931@1: 68039 keys, 1383078 bytes
+2025/06/30-02:04:56.923 5e1 Compacted 1@1 + 6@2 files => 12436629 bytes
+2025/06/30-02:04:56.924 5e1 compacted to: files[ 0 0 6 0 0 0 0 ]
+2025/06/30-02:04:56.924 5e1 Delete type=2 #918
+2025/06/30-02:04:56.925 5e1 Delete type=2 #922
+2025/06/30-02:04:56.925 5e1 Delete type=2 #921
+2025/06/30-02:04:56.925 5e1 Delete type=2 #919
+2025/06/30-02:04:56.925 5e1 Delete type=2 #920
+2025/06/30-02:04:56.925 5e1 Delete type=2 #925
+2025/06/30-02:04:56.925 5e1 Delete type=2 #917
